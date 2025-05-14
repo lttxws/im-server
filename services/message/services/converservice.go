@@ -25,7 +25,7 @@ var (
 )
 
 func init() {
-	converCache = caches.NewLruCacheWithAddReadTimeout(100000, nil, 10*time.Minute, 10*time.Minute)
+	converCache = caches.NewLruCacheWithAddReadTimeout("msg_conver_cache", 100000, nil, 10*time.Minute, 10*time.Minute)
 	batchExecutorPool = tools.NewBatchExecutorPool(128, 100, 5*time.Second, batchSaveConver)
 }
 
@@ -156,8 +156,8 @@ func QryConversation(ctx context.Context, userId, targetId string, channelType p
 func HandleDownMsgByConver(ctx context.Context, userId, targetId string, channelType pbobjs.ChannelType, downMsg *pbobjs.DownMsg) {
 	conver := GetConversation(ctx, userId, targetId, channelType)
 	if conver.UndisturbType == UndisturbType_Normal {
+		downMsg.UndisturbType = UndisturbType_Normal
 		if !commonservices.IsMentionedMe(userId, downMsg) {
-			downMsg.UndisturbType = UndisturbType_Normal
 			downMsg.Flags = msgdefines.SetUndisturbMsg(downMsg.Flags)
 		}
 	} else {

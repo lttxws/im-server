@@ -7,6 +7,7 @@ import (
 	"im-server/commons/gmicro/utils"
 	"im-server/commons/tools"
 	"im-server/services/appbusiness/apis"
+	"im-server/services/connectmanager/navigator"
 	"im-server/services/connectmanager/server/codec"
 	"im-server/services/connectmanager/server/imcontext"
 	"net/http"
@@ -35,6 +36,7 @@ func (server *ImWebsocketServer) SyncStart(port int) {
 	})
 
 	apis.LoadAppApis(mux)
+	navigator.LoadClientLogUploadApis(mux)
 	http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
 }
 
@@ -56,6 +58,11 @@ func (server *ImWebsocketServer) ImWsServer(w http.ResponseWriter, r *http.Reque
 	if referer == "" {
 		referer = strings.TrimSpace(r.Header.Get("Referer"))
 	}
+	clientIp := conn.RemoteAddr().String()
+	realIp := strings.TrimSpace(r.Header.Get("X-Real-Ip"))
+	if realIp != "" {
+		clientIp = realIp
+	}
 	child := &ImWebsocketChild{
 		stopChan:         make(chan bool, 1),
 		wsConn:           conn,
@@ -64,7 +71,7 @@ func (server *ImWebsocketServer) ImWsServer(w http.ResponseWriter, r *http.Reque
 		latestActiveTime: time.Now().UnixMilli(),
 	}
 	utils.SafeGo(func() {
-		child.startWsListener(referer)
+		child.startWsListener(referer, clientIp)
 	})
 }
 func (server *ImWebsocketServer) Stop() {
@@ -80,7 +87,7 @@ type ImWebsocketChild struct {
 	ticker           *time.Ticker
 }
 
-func (child *ImWebsocketChild) startWsListener(referer string) {
+func (child *ImWebsocketChild) startWsListener(referer, clientIp string) {
 	handler := IMWebsocketMsgHandler{child.messageListener}
 	ctx := &WsHandleContextImpl{
 		conn:       child.wsConn,
@@ -93,6 +100,7 @@ func (child *ImWebsocketChild) startWsListener(referer string) {
 	imcontext.SetContextAttr(ctx, imcontext.StateKey_CtxLocker, &sync.Mutex{})
 	imcontext.SetContextAttr(ctx, imcontext.StateKey_Limiter, rate.NewLimiter(100, 10))
 	imcontext.SetContextAttr(ctx, imcontext.StateKey_Referer, referer)
+	imcontext.SetContextAttr(ctx, imcontext.StateKey_ClientIp, clientIp)
 
 	//start ticker
 	child.startTicker(ctx, handler)

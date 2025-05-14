@@ -9,6 +9,7 @@ import (
 	"im-server/services/commonservices"
 	"im-server/services/commonservices/interceptors"
 	"im-server/services/commonservices/msgdefines"
+	"im-server/services/logmanager/msglogs"
 	"time"
 )
 
@@ -47,17 +48,26 @@ func SendGroupMsg(ctx context.Context, upMsg *pbobjs.UpMsg) (errs.IMErrorCode, s
 
 	//check msg interceptor
 	var modifiedMsg *pbobjs.DownMsg
-	result := commonservices.CheckMsgInterceptor(ctx, senderId, groupId, pbobjs.ChannelType_Group, upMsg)
+	result, interceptorCode := commonservices.CheckMsgInterceptor(ctx, senderId, groupId, pbobjs.ChannelType_Group, upMsg)
 	if result == interceptors.InterceptorResult_Reject {
 		sendTime := time.Now().UnixMilli()
 		msgId := tools.GenerateMsgId(sendTime, int32(pbobjs.ChannelType_Group), groupId)
-		return errs.IMErrorCode_MSG_Hit_Sensitive, msgId, sendTime, 0, upMsg.ClientUid, 0, nil
+		if interceptorCode == 0 {
+			return errs.IMErrorCode_MSG_Hit_Sensitive, msgId, sendTime, 0, upMsg.ClientUid, 0, nil
+		} else {
+			return errs.IMErrorCode(interceptorCode), msgId, sendTime, 0, upMsg.ClientUid, 0, nil
+		}
 	} else if result == interceptors.InterceptorResult_Replace {
 		modifiedMsg = &pbobjs.DownMsg{
 			MsgType:    upMsg.MsgType,
 			MsgContent: upMsg.MsgContent,
 		}
+	} else if result == interceptors.InterceptorResult_Silent {
+		sendTime := time.Now().UnixMilli()
+		msgId := tools.GenerateMsgId(sendTime, int32(pbobjs.ChannelType_Group), groupId)
+		return errs.IMErrorCode_SUCCESS, msgId, sendTime, 0, upMsg.ClientUid, 0, nil
 	}
+
 	msgConverCache := commonservices.GetMsgConverCache(ctx, groupId, pbobjs.ChannelType_Group)
 	msgId, sendTime, msgSeq := msgConverCache.GenerateMsgId(groupId, pbobjs.ChannelType_Group, time.Now().UnixMilli(), upMsg.Flags)
 	preMsgId := bases.GetMsgIdFromCtx(ctx)
@@ -121,6 +131,7 @@ func SendGroupMsg(ctx context.Context, upMsg *pbobjs.UpMsg) (errs.IMErrorCode, s
 		GrpMemberInfo:  grpMemberInfo,
 	}
 	commonservices.Save2Sendbox(ctx, downMsg4Sendbox)
+	msglogs.LogMsg(ctx, downMsg4Sendbox)
 
 	if bases.GetOnlySendboxFromCtx(ctx) {
 		return errs.IMErrorCode_SUCCESS, msgId, sendTime, msgSeq, upMsg.ClientUid, int32(memberCount), modifiedMsg

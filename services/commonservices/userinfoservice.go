@@ -120,7 +120,7 @@ type TargetUserInfo struct {
 }
 
 func init() {
-	targetUserCache = caches.NewLruCacheWithAddReadTimeout(100000, nil, 5*time.Second, 5*time.Second)
+	targetUserCache = caches.NewLruCacheWithAddReadTimeout("userinfo_cache", 100000, nil, 5*time.Second, 5*time.Second)
 	targetUserLocks = tools.NewSegmentatedLocks(256)
 }
 
@@ -214,6 +214,7 @@ func GetTargetDisplayUserInfo(ctx context.Context, userId string) *pbobjs.UserIn
 		UserPortrait: tUserInfo.UserPortrait,
 		ExtFields:    tUserInfo.ExtFields,
 		UpdatedTime:  tUserInfo.UpdatedTime,
+		UserType:     tUserInfo.UserType,
 	}
 }
 

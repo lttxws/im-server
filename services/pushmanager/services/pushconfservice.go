@@ -27,7 +27,7 @@ var (
 )
 
 func init() {
-	pushConfCache = caches.NewLruCacheWithAddReadTimeout(10000, nil, 5*time.Minute, 5*time.Minute)
+	pushConfCache = caches.NewLruCacheWithAddReadTimeout("pushconf_cache", 10000, nil, 5*time.Minute, 5*time.Minute)
 	pushConfLocks = tools.NewSegmentatedLocks(128)
 }
 
@@ -127,7 +127,7 @@ func initIosPushConf(ctx context.Context, appkey, packageName string) *IosPushCo
 		}
 		return iosPushConf
 	} else {
-		logs.WithContext(ctx).Errorf("qry ios push conf failed. %v", err)
+		logs.WithContext(ctx).Errorf("qry ios push conf failed.app_key:%s\tpackage:%s\terr:%v", appkey, packageName, err)
 	}
 	return noExistIosPushConf
 }
